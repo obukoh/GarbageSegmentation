@@ -6,6 +6,7 @@ from util import model
 from util import repoter as rp
 from PIL import Image
 import numpy as np
+from bayes_opt import BayesianOptimization
 
 
 def load_dataset(train_rate):
@@ -13,36 +14,12 @@ def load_dataset(train_rate):
                        dir_segmented="dataset_unity/newAfter2")
     return loader.load_train_test(train_rate=train_rate, shuffle=True)
 
-def compute_class_accuracies(pred, label, num_classes):
-    total = []
-    for val in range(num_classes):
-        print("label", label)
-        print("num_classes", num_classes)
-        print("val", val)
-
-    count = [0.0] * num_classes
-    for i in range(len(label)):
-        if pred[i] == label[i]:
-            count[int(pred[i])] = count[int(pred[i])] + 1.0
-
-    # If there are no pixels from a certain class in the GT,
-    # it returns NAN because of divide by zero
-    # Replace the nans with a 1.0.
-    accuracies = []
-    for i in range(len(total)):
-        if total[i] == 0:
-            accuracies.append(1.0)
-        else:
-            accuracies.append(count[i] / total[i])
-
-    return accuracies
-
 def train(parser):
     # 訓練とテストデータを読み込みます
     # return train_set, test_set
     train, test = load_dataset(train_rate=parser.trainrate)
-    valid = train.perm(0, 30) #decide on batch size of valid
-    test = test.perm(0, 150) #decide on batch size of test
+    valid = train.perm(0, 30)
+    test = test.perm(0, 150)
 
     # 結果保存用のインスタンスを作成します
     reporter = rp.Reporter(parser=parser)
@@ -55,12 +32,8 @@ def train(parser):
     # モデルの生成
     model_unet = model.UNet(l2_reg=parser.l2reg).model
 
-    # 誤差関数とオプティマイザの設定をします
-    # tf.reduce_mean : 平均を出している
-    #https://www.tensorflow.org/api_docs/python/tf/nn/softmax_cross_entropy_with_logits
+    # 誤差関数とオプティマイザの設定
     # Computes softmax cross entropy between logits and labels.
-    # labels: Each vector along the class dimension should hold a valid probability distribution e.g. for the case in which labels are of shape [batch_size, num_classes], each row of labels[i] must be a valid probability distribution.
-    # logits: Per-label activations, typically a linear output. These activation energies are interpreted as unnormalized log probabilities.
     cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=model_unet.teacher,
                                                                            logits=model_unet.outputs))
 
@@ -69,15 +42,35 @@ def train(parser):
     with tf.control_dependencies(update_ops):
         train_step = tf.train.AdamOptimizer(0.001).minimize(cross_entropy)
 
-    # 精度の算出をします
-    # 尤もらしいClass、argmax(model_unet.outputs, 3)が教師のラベルと等しいか = true or false
-    #teacher = tf.placeholder(tf.float32, [None(arg0), size[0](arg1), size[1](arg2), len(ld.DataSet.CATEGORY)(arg3)])
+    # 精度の算出
+    #teacher = tf.placeholder(tf.float32, [None, size[0], size[1], len(ld.DataSet.CATEGORY)])
+    """
+    # クラスごとに個別に精度を求めて平均する(include ground class)
+    sum_prediction_per_class = tf.reduce_mean(tf.cast(tf.equal(tf.reshape(tf.argmax(model_unet.outputs, 3), [-1]), 0), tf.float32)) / tf.reduce_mean(tf.cast(tf.equal(tf.reshape(tf.argmax(model_unet.teacher, 3), [-1]), 0), tf.float32)) + tf.reduce_mean(tf.cast(tf.equal(tf.reshape(tf.argmax(model_unet.outputs, 3), [-1]), 1), tf.float32)) / tf.reduce_mean(tf.cast(tf.equal(tf.reshape(tf.argmax(model_unet.teacher, 3), [-1]), 1), tf.float32)) + tf.reduce_mean(tf.cast(tf.equal(tf.reshape(tf.argmax(model_unet.outputs, 3), [-1]), 2), tf.float32)) / tf.reduce_mean(tf.cast(tf.equal(tf.reshape(tf.argmax(model_unet.teacher, 3), [-1]), 2), tf.float32)) + tf.reduce_mean(tf.cast(tf.equal(tf.reshape(tf.argmax(model_unet.outputs, 3), [-1]), 3), tf.float32)) / tf.reduce_mean(tf.cast(tf.equal(tf.reshape(tf.argmax(model_unet.teacher, 3), [-1]), 3), tf.float32)) + tf.reduce_mean(tf.cast(tf.equal(tf.reshape(tf.argmax(model_unet.outputs, 3), [-1]), 4), tf.float32)) / tf.reduce_mean(tf.cast(tf.equal(tf.reshape(tf.argmax(model_unet.teacher, 3), [-1]), 4), tf.float32))
+    mean_accuracy = sum_prediction_per_class * 0.2
+    """
+    # クラスごとに個別に精度を求めて平均する(except ground class)
+    outputs_1 = tf.cond(tf.reduce_mean(tf.cast(tf.equal(tf.reshape(tf.argmax(model_unet.outputs, 3), [-1]), 1), tf.float32)) > tf.reduce_mean(tf.cast(tf.equal(tf.reshape(tf.argmax(model_unet.teacher, 3), [-1]), 1), tf.float32)), lambda: tf.reduce_mean(tf.cast(tf.equal(tf.reshape(tf.argmax(model_unet.teacher, 3), [-1]), 1), tf.float32)), lambda: tf.reduce_mean(tf.cast(tf.equal(tf.reshape(tf.argmax(model_unet.outputs, 3), [-1]), 1), tf.float32)))
+    outputs_2 = tf.cond(tf.reduce_mean(tf.cast(tf.equal(tf.reshape(tf.argmax(model_unet.outputs, 3), [-1]), 2), tf.float32)) > tf.reduce_mean(tf.cast(tf.equal(tf.reshape(tf.argmax(model_unet.teacher, 3), [-1]), 2), tf.float32)), lambda: tf.reduce_mean(tf.cast(tf.equal(tf.reshape(tf.argmax(model_unet.teacher, 3), [-1]), 2), tf.float32)), lambda: tf.reduce_mean(tf.cast(tf.equal(tf.reshape(tf.argmax(model_unet.outputs, 3), [-1]), 2), tf.float32)))
+    outputs_3 = tf.cond(tf.reduce_mean(tf.cast(tf.equal(tf.reshape(tf.argmax(model_unet.outputs, 3), [-1]), 3), tf.float32)) > tf.reduce_mean(tf.cast(tf.equal(tf.reshape(tf.argmax(model_unet.teacher, 3), [-1]), 3), tf.float32)), lambda: tf.reduce_mean(tf.cast(tf.equal(tf.reshape(tf.argmax(model_unet.teacher, 3), [-1]), 3), tf.float32)), lambda: tf.reduce_mean(tf.cast(tf.equal(tf.reshape(tf.argmax(model_unet.outputs, 3), [-1]), 3), tf.float32)))
+    outputs_4 = tf.cond(tf.reduce_mean(tf.cast(tf.equal(tf.reshape(tf.argmax(model_unet.outputs, 3), [-1]), 4), tf.float32)) > tf.reduce_mean(tf.cast(tf.equal(tf.reshape(tf.argmax(model_unet.teacher, 3), [-1]), 4), tf.float32)), lambda: tf.reduce_mean(tf.cast(tf.equal(tf.reshape(tf.argmax(model_unet.teacher, 3), [-1]), 4), tf.float32)), lambda: tf.reduce_mean(tf.cast(tf.equal(tf.reshape(tf.argmax(model_unet.outputs, 3), [-1]), 4), tf.float32)))
+    sum_prediction_per_class = outputs_1 / tf.reduce_mean(tf.cast(tf.equal(tf.reshape(tf.argmax(model_unet.teacher, 3), [-1]), 1), tf.float32)) + outputs_2 / tf.reduce_mean(tf.cast(tf.equal(tf.reshape(tf.argmax(model_unet.teacher, 3), [-1]), 2), tf.float32)) + outputs_3 / tf.reduce_mean(tf.cast(tf.equal(tf.reshape(tf.argmax(model_unet.teacher, 3), [-1]), 3), tf.float32)) + outputs_4 / tf.reduce_mean(tf.cast(tf.equal(tf.reshape(tf.argmax(model_unet.teacher, 3), [-1]), 4), tf.float32))
+    mean_accuracy = sum_prediction_per_class * 0.25
+    """
+    sum_prediction_per_class = tf.reduce_mean(tf.cast(tf.equal(tf.reshape(tf.argmax(model_unet.outputs, 3), [-1]), 1), tf.float32)) / tf.reduce_mean(tf.cast(tf.equal(tf.reshape(tf.argmax(model_unet.teacher, 3), [-1]), 1), tf.float32)) + tf.reduce_mean(tf.cast(tf.equal(tf.reshape(tf.argmax(model_unet.outputs, 3), [-1]), 2), tf.float32)) / tf.reduce_mean(tf.cast(tf.equal(tf.reshape(tf.argmax(model_unet.teacher, 3), [-1]), 2), tf.float32)) + tf.reduce_mean(tf.cast(tf.equal(tf.reshape(tf.argmax(model_unet.outputs, 3), [-1]), 3), tf.float32)) / tf.reduce_mean(tf.cast(tf.equal(tf.reshape(tf.argmax(model_unet.teacher, 3), [-1]), 3), tf.float32)) + tf.reduce_mean(tf.cast(tf.equal(tf.reshape(tf.argmax(model_unet.outputs, 3), [-1]), 4), tf.float32)) / tf.reduce_mean(tf.cast(tf.equal(tf.reshape(tf.argmax(model_unet.teacher, 3), [-1]), 4), tf.float32))
+    mean_accuracy = sum_prediction_per_class * 0.25
+    """
+    """
+    #standard accuracy
     correct_prediction = tf.equal(tf.argmax(model_unet.outputs, 3), tf.argmax(model_unet.teacher, 3))
     accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+    """
+    """
+    # Accuracy where all labels need to be correct
     all_labels_true = tf.reduce_min(tf.cast(correct_prediction, tf.float32), 1)
     mean_accuracy = tf.reduce_mean(all_labels_true)
-
-    # セッションの初期化をします
+    """
+    # セッションの初期化
     gpu_config = tf.ConfigProto(gpu_options=tf.GPUOptions(per_process_gpu_memory_fraction=0.7), device_count={'GPU': 1},
                                 log_device_placement=False, allow_soft_placement=True)
     sess = tf.InteractiveSession(config=gpu_config) if gpu else tf.InteractiveSession()
@@ -145,10 +138,9 @@ def get_parser():
     )
 
     parser.add_argument('-g', '--gpu', action='store_true', help='Using GPUs')
-    parser.add_argument('-e', '--epoch', type=int, default=200, help='Number of epochs')
+    parser.add_argument('-e', '--epoch', type=int, default=100, help='Number of epochs')
     parser.add_argument('-b', '--batchsize', type=int, default=32, help='Batch size')
     parser.add_argument('-t', '--trainrate', type=float, default=0.85, help='Training rate')
-    #parser.add_argument('-t', '--trainrate', type=float, default=0.01, help='Training rate')
     parser.add_argument('-a', '--augmentation', action='store_true', help='Number of epochs')
     parser.add_argument('-r', '--l2reg', type=float, default=0.001, help='L2 regularization')
 
@@ -158,3 +150,4 @@ def get_parser():
 if __name__ == '__main__':
     parser = get_parser().parse_args()
     train(parser)
+
