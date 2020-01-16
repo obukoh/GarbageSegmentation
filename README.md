@@ -14,7 +14,7 @@ The project that I classify the 4 kinds of garbages by u-net.
 学習結果を図1に示す。左がテストデータの入力画像であり、右がテストデータの教師画像である。そして中央が結果の画像である。学習が進むごとに、適切にセグメンテーションできていることが確認できる。また、Epoch12のように隠れた物体も適切にセグメンテーションができることも確認できた。図2にAccuracyとLoss における学習過程のグラフを示す。テストデータに関して、Accuracyはおよそepoch 10で収束し始め、最終的に認識精度は、約98％となった。Lossに関しても最終的に、約0.01%で収束している。
 
 #### 以下は、結果の画像である。  
-![epoch_0](https://github.com/obukoh/GarbageSegmentation/blob/master/result/20200108_1441/image/test/epoch_0.png "epoch_0")  
-![epoch_0](https://github.com/obukoh/GarbageSegmentation/blob/master/result/20200108_1441/image/test/epoch_12.png "epoch_12")  
-![epoch_0](https://github.com/obukoh/GarbageSegmentation/blob/master/result/20200108_1441/image/test/epoch_24.png "epoch_24")  
+![epoch_36](https://github.com/obukoh/GarbageSegmentation/blob/master/result/20200108_1441/image/test/epoch_36.png "epoch_36")  
+![epoch_45](https://github.com/obukoh/GarbageSegmentation/blob/master/result/20200108_1441/image/test/epoch_45.png "epoch_45")  
+![epoch_24](https://github.com/obukoh/GarbageSegmentation/blob/master/result/20200108_1441/image/test/epoch_24.png "epoch_24")  
 左:入力画像　右:教師画像　中央:出力画像
