@@ -17,4 +17,8 @@ The project that I classify the 4 kinds of garbages by u-net.
 ![epoch_36](https://github.com/obukoh/GarbageSegmentation/blob/master/result/20200108_1441/image/test/epoch_36.png "epoch_36")  
 ![epoch_45](https://github.com/obukoh/GarbageSegmentation/blob/master/result/20200108_1441/image/test/epoch_45.png "epoch_45")  
 ![epoch_24](https://github.com/obukoh/GarbageSegmentation/blob/master/result/20200108_1441/image/test/epoch_24.png "epoch_24")  
-左:入力画像　右:教師画像　中央:出力画像
+左:入力画像　右:教師画像　中央:出力画像  
+
+#### 以下は、AccuracyとLossのグラフである。  
+![epoch_36](https://github.com/obukoh/GarbageSegmentation/blob/master/result/20200108_1441/learning/Accuracy.png "Accuracy")  
+![epoch_36](https://github.com/obukoh/GarbageSegmentation/blob/master/result/20200108_1441/learning/Loss.png "Loss")
