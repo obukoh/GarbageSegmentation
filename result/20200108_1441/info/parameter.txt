@@ -1,0 +1,5 @@
+Number of epochs:50
+Batch size:64
+Training rate:0.85
+Augmentation:True
+L2 regularization:0.001
